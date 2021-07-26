@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html charset=utf-8" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>睿慕课作业-路径规划-W2</title>
+    <script src="script/jquery-1.10.2.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="script/bootstrap.min.css"></link>
+    <script src="script/bootstrap.min.js"></script>
+</head>
+<body>
+<div>
+    <button onclick="init()">初始化</button>
+    <button onclick="next()">下一步</button>
+</div>
+<div class="map" id="map">
+
+</div>
+
+</body>
+</html>
+<script>
+for(let i=0;i<63;i++){
+    $('.map').append('<div class="point"></div>')
+}
+let node = function(type,id){
+    this.type = type
+    this.G = 0
+    this.H = 0
+    this.source = -1
+    this.id = id
+    this.X = id%9
+    this.Y = Math.floor(id/9)
+}
+node.prototype.ToDiv = function(){
+    let divstring = '<div class="point '+ classList[this.type] +' '+checkOpen(this.id) +' '+checkClose(this.id)+' '+checkRoute(this.id)+'">'
+        if(this.type>0){
+        divstring += '<span>X:'+this.X+'</span>'
+        divstring += '<span>Y:'+this.Y+'</span><br>'
+        if(this.source>=0){
+            divstring +='<span>source:('+nodeList[this.source].X+','+nodeList[this.source].Y+')</span><br>'
+        }if(checkOpen(this.id)||checkClose(this.id)){
+            divstring +='<span>F:'+nodeList[this.id].getF()+'</span><br>'  
+            
+            divstring +='<span>G:'+nodeList[this.id].G+',H:'+nodeList[this.id].H+'</span><br>'  
+        }
+        }else{
+            divstring +='<span>wall</span>'
+        }
+        divstring +='</div>'
+    return divstring
+}
+node.prototype.getF = function(){
+    return this.G+this.H
+}
+let nodeList = []
+let openList = []
+let closeList = []
+let sp = 29
+let ep = 33
+let stopFlag = false;
+function init(){
+    nodeList = []
+    openList = []
+    closeList = []
+    routeList = []
+    stopFlag = false;
+    nowMinF = 9999
+    for(let i=0;i<63;i++){
+        if(i==22||i==31||i==40){
+            nodeList.push(new node(0,i))
+        }else if(i==sp){
+            nodeList.push(new node(2,i))
+        }else if(i==ep){
+            nodeList.push(new node(3,i))
+        }else{
+            nodeList.push(new node(1,i))
+        }
+    }
+    for(let i=0;i<63;i++){
+        nodeList[i].H = computeMDistance(nodeList[i],nodeList[33])
+    }
+    openList.push(sp)
+    render()
+}
+
+
+function checkOpen(nodeID){
+    if(openList.indexOf(nodeID)>-1) return 'openList'
+    else return ''
+}
+function checkRoute(nodeID){
+    if(routeList.indexOf(nodeID)>-1) return 'routeList'
+    else return ''
+}
+
+function checkClose(nodeID){
+    if(closeList.indexOf(nodeID)>-1) return 'closeList'
+    else return ''
+}
+
+function computeMDistance(node1,node2){
+    return (Math.abs(node2.X-node1.X)+Math.abs(node2.Y-node1.Y))*10
+}
+
+function computeG(nodeF,nodeT,flag=true){
+    let deltaX = Math.abs(nodeF.X-nodeT.X)
+    let deltaY = Math.abs(nodeF.Y-nodeT.Y)
+    if(flag){
+    nodeT.source = nodeF.id
+    }
+    if(deltaX==1&&deltaY==1) return 14
+    else return 10
+}
+
+function findMinF(){
+    let nowMinID = -1
+    let tH = 9999
+    let nowMinF = 9999
+    let openlen = openList.length
+    if (openlen==0) return -2
+    let removeList = []
+    for(let i=0;i<openlen;i++){
+        let nowNode = nodeList[openList[i]]
+        if(nowNode.getF()<nowMinF){
+            nowMinF = nowNode.getF()
+            nowMinID = nowNode.id
+            tH = nowNode.H
+        }else if(nowNode.getF()==nowMinF){
+            if(nowNode.H<tH){
+                nowMinF = nowNode.getF()
+                nowMinID = nowNode.id
+                tH = nowNode.H
+            }
+        }else{
+            removeList.push(openList[i])
+        }
+    }
+    //for(let k of removeList){
+    //   openList.splice(openList.indexOf(k),1)
+    //    closeList.push(k)
+    //}
+    return nowMinID
+}
+
+function addOpenAndMoveToClose(minFID){
+    openList.splice(openList.indexOf(minFID),1)
+    closeList.push(minFID)
+    let waitToCheckList = [minFID-10,minFID-9,minFID-8,minFID+1,minFID+10,minFID+9,minFID+8,minFID-1]
+    if(nodeList[minFID].X==0){
+        waitToCheckList[0] = -1
+        waitToCheckList[6] = -1
+        waitToCheckList[7] = -1
+    }
+    if(nodeList[minFID].X==8){
+        waitToCheckList[2] = -1
+        waitToCheckList[3] = -1
+        waitToCheckList[4] = -1
+    }
+    for(let i=1;i<8;i=i+2){
+        if(checkCanAdd(waitToCheckList[i])){
+            let nowIndex = waitToCheckList[i]
+            doAddOrUpdate(nowIndex,minFID)
+        }
+        else if(isWall(waitToCheckList[i])){
+            waitToCheckList[(i+1)%8] = -1
+            waitToCheckList[i-1] = -1
+        }
+    }
+    for(let i=0;i<8;i=i+2){
+        if(checkCanAdd(waitToCheckList[i])){
+            let nowIndex = waitToCheckList[i]
+            doAddOrUpdate(nowIndex,minFID)
+        }
+    }
+}
+
+function isWall(id){
+    if(id<0||id>63) return true
+    if(nodeList[id].type==0) return true
+    return false
+}
+function checkCanAdd(id){
+    if(id<0||id>63) return false
+    if(nodeList[id].type==0) return false
+    if(closeList.indexOf(id)>-1) return false
+    return true
+}
+
+function doAddOrUpdate(nowIndex,minFID){
+    if(openList.indexOf(nowIndex)==-1){
+        nodeList[nowIndex].G = computeG(nodeList[minFID],nodeList[nowIndex])+nodeList[minFID].G
+        addToOpen(nowIndex)
+    }else{
+        let newG = computeG(nodeList[minFID],nodeList[nowIndex],false)+nodeList[minFID].G
+        if(newG<nodeList[nowIndex].G){
+            nodeList[nowIndex].source = minFID
+            nodeList[nowIndex].G = newG
+        }
+    }
+}
+
+function addToOpen(id){
+    openList.push(id)
+    if(id==ep) stopFlag = true
+}
+let classList = ['wall','','start','end']
+function render(){
+    $('.map').html('')
+    for(let i=0;i<63;i++){
+        $('.map').append(nodeList[i].ToDiv())
+    }
+}
+var routeList = []
+function computeRoute(ep){
+    let route = '('+nodeList[ep].X+','+nodeList[ep].Y+')'
+    let nowE = ep
+    let count = 0
+    while(true){
+        if(nowE!=ep){
+        routeList.push(nowE)
+        }
+        let nowS = nodeList[nowE].source
+        let np = nodeList[nowS]
+        route = '('+np.X+','+np.Y+')-->' + route
+        nowE = nowS
+        if(nowE==sp){
+            break
+        }
+    }
+    return route
+}
+
+function next(){
+    if(stopFlag){
+        var route = computeRoute(ep)
+        alert('算法结束！路径为：'+route)
+        render()
+    }else{
+        let minFID = findMinF()
+        if(minFID>-1){
+            //nowMinF = nodeList[minFID].getF()
+            addOpenAndMoveToClose(minFID)
+        }
+        if(minFID == -2) alert('无路径！')
+        render()
+    }
+}
+</script>
+<style>
+.map{
+	width:950px;
+    height:750px;
+}
+
+
+
+.point{
+    width:100px;
+    height:100px;
+    margin:1px;
+    background:black;
+    display: inline-block;
+    color: white;
+    vertical-align: top;
+}
+
+.wall{
+    background:blue;
+}
+.start{
+    background:green;
+}
+.end{
+    background:red;
+}
+span{
+    margin:2px;
+}
+.openList{
+    border-style: solid;
+    border-width: 2px;
+    border-color: violet;
+}
+.closeList{
+    
+    border-style: solid;
+    border-width: 2px;
+    border-color: yellowgreen;
+}
+.routeList{
+    background: darkcyan;
+}
+</style>
