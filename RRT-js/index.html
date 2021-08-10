@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html charset=utf-8" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>睿慕课作业-路径规划-W2</title>
+    <script src="script/jquery-1.10.2.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="script/bootstrap.min.css"></link>
+    <script src="script/bootstrap.min.js"></script>
+</head>
+<body>
+<div>
+    <button onclick="init()">初始化</button>
+    <button onclick="begin()">求解</button>
+</div>
+<canvas id="myCanvas" width="800" height="600"
+style="border:1px solid #000000;">
+</canvas>
+
+</body>
+</html>
+<script>
+var w = window;
+requestAnimationFrame = w.requestAnimationFrame || w.webkitRequestAnimationFrame || w.msRequestAnimationFrame || w.mozRequestAnimationFrame;
+
+let myMap = function(width,height){
+	this.wallList = []
+	this.routeList = []
+	this.answerList = []
+}
+
+let nowMap = new myMap(800,600)
+
+let init = function(){
+	nowMap = new myMap(800,600)
+	nowMap.wallList = generateRandomPuzzle(20)
+	parent = []
+	trace = {}
+}
+
+let parent = []
+let trace = {}
+
+let render = function(){
+	let mycanvas = document.getElementById("myCanvas")
+	let ctx = mycanvas.getContext("2d")
+	ctx.clearRect(0,0,mycanvas.width,mycanvas.height);
+	for(let wall of nowMap.wallList){
+		drawLine(ctx,wall,"#111111")
+	}
+	for(let route of nowMap.routeList){
+		drawLine(ctx,route,"#0000ff")
+	}
+	for(let answer of nowMap.answerList){
+		drawLine(ctx,answer,"#00ff00")
+	}
+}
+
+let drawLine = function(ctx,line,color){
+	ctx.strokeStyle = color
+	ctx.beginPath()
+	ctx.moveTo(line[0][0],line[0][1])
+	ctx.lineTo(line[1][0],line[1][1])
+	ctx.stroke()
+	
+}
+
+let update = function(){
+	if(nowlock){
+	let randomX = 798
+	let randomY = 598
+	if(Math.random()>0.5){
+		randomX =  Math.floor(Math.random()*800)
+		randomY =  Math.floor(Math.random()*600)
+	}
+	//执行RRT
+	let RRTrtn = RRT(randomX,randomY,parent)
+	//若成功 则渲染
+	if(RRTrtn.state==true){
+		parent.push([RRTrtn.newX,RRTrtn.newY])
+		trace[RRTrtn.newX+","+RRTrtn.newY] = [RRTrtn.fatherX,RRTrtn.fatherY]
+		
+		nowMap.routeList.push([[RRTrtn.newX,RRTrtn.newY],[RRTrtn.fatherX,RRTrtn.fatherY]])
+	}
+	let endFlag = checkEnd()
+	if(endFlag.state){
+		nowlock = false
+		nowMap.routeList.push([[798,598],[endFlag.fatherX,endFlag.fatherY]])
+		trace["798,598"] = [RRTrtn.fatherX,RRTrtn.fatherY]
+		doTrance()
+		alert('算法结束!')
+	}
+	}
+}
+let nowlock = false;
+let begin = function(){
+	parent.push([1,1])
+	
+	nowlock = true
+
+}
+
+let doTrance = function(){
+	let nowP = [798,598]
+	while(true){
+		let nextP = trace[nowP[0]+","+nowP[1]]
+		nowMap.answerList.push([nowP,nextP])
+		nowP = nextP
+		if(nowP[0]==1 && nowP[1] ==1) break
+	}
+}
+
+var main = function () {
+	update()
+	render()
+ 
+	
+	// Request to do this again ASAP
+	requestAnimationFrame(main);
+};
+
+
+let RRT = function(x,y,parent){
+	let rtn = {
+		newX:-1,
+		newY:-1,
+		state:false,
+		fatherX:-1,
+		fatherY:-1
+	}
+	let minLen = 9999999
+	for(let p of parent){
+		let nowDistance = (x-p[0])*(x-p[0])+(y-p[1])*(y-p[1])
+		if(nowDistance < minLen){
+			rtn.fatherX = p[0]
+			rtn.fatherY = p[1]
+			minLen = nowDistance
+		}
+	}
+	
+	if(minLen>500){
+		dx = x-rtn.fatherX
+		dy = y-rtn.fatherY
+		k = Math.sqrt( minLen/500 )
+		rtn.newX = Math.round( rtn.fatherX + dx/k)
+		rtn.newY = Math.round( rtn.fatherY + dy/k)
+		if(!checkInsect(nowMap.wallList,[[rtn.fatherX,rtn.fatherY],[rtn.newX,rtn.newY]])){
+			rtn.state = true
+		}
+	}
+	return rtn
+
+}
+
+let checkEnd = function(){
+	let x = 798
+	let y = 598
+	let minLen = 2000
+	let rtn = {
+		newX:-1,
+		newY:-1,
+		state:false,
+		fatherX:-1,
+		fatherY:-1
+	}
+	for(let p of parent){
+		let nowDistance = (x-p[0])*(x-p[0])+(y-p[1])*(y-p[1])
+		if(nowDistance < minLen){
+			rtn.fatherX = p[0]
+			rtn.fatherY = p[1]
+			minLen = nowDistance
+		}
+	}
+	
+	if(minLen<1000){
+		if(!checkInsect(nowMap.wallList,[[rtn.fatherX,rtn.fatherY],[798,598]])){
+			rtn.state = true
+		}
+	}
+	return rtn
+}
+
+//时间有限，就搞一个随机生成一个保证有解（就是贴着地图边摸过去）的线段组作为墙壁了，毕竟关键部分还是自己过一遍RRT算法
+let generateRandomPuzzle = function(num){
+	let rtn = []
+	let count = 0
+	while(true){
+		let newLine = []
+		let newAX = 10 + Math.floor(Math.random()*780)
+		let newBX = 10 + Math.floor(Math.random()*780)
+		let newAY = 10 + Math.floor(Math.random()*580)
+		let newBY = 10 + Math.floor(Math.random()*580)
+		newLine = [[newAX,newAY],[newBX,newBY]]
+		if(checkInsect(rtn,newLine)){
+		
+		}else{
+			rtn.push(newLine)
+			count++
+		}
+		if(count>=num) break
+	}
+	return rtn
+}
+//检查相交
+let checkInsect = function(lines,newLine){
+	for(let line of lines){
+		if(lineIntersectsLine(line,newLine)) return true
+	}
+	return false
+}
+
+
+//这里接用 geometric.js 内置的检查线段相交的代码，RRT中校验路径是否和墙相交也用得到
+function lineIntersectsLine(lineA, lineB) {
+  const EPSILON = 0.0001
+  const a = lineA[0][0],
+        b = lineA[0][1],
+        c = lineA[1][0],
+        d = lineA[1][1],
+        p = lineB[0][0],
+        q = lineB[0][1],
+        r = lineB[1][0],
+        s = lineB[1][1],
+        det = ((c - a) * (s - q) - (r - p) * (d - b));
+
+  // Check if lines are parallel
+  if (floatEqual(det, 0)) {
+    // Check if parallel lines have same origin
+    const lineAConst = (d - b) * a - (c - a) * b;
+    const lineBConst = (s - q) * p - (r - p) * q;
+
+    if (floatEqual(lineBConst, lineAConst)) {
+      // Check if segments overlap
+      if (floatEqual(b, q) && floatEqual(d, s)) {
+        const minLineXA = Math.min(a, c);
+        const maxLineXA = Math.max(a, c);
+        const minLineXB = Math.min(p, r);
+        const maxLineXB = Math.max(p, r);
+
+        return minLineXB <= maxLineXA + EPSILON && maxLineXB >= minLineXA - EPSILON;
+      }
+
+      const minLineYA = Math.min(b, d);
+      const maxLineYA = Math.max(b, d);
+      const minLineYB = Math.min(q, s);
+      const maxLineYB = Math.max(q, s);
+
+      return minLineYB <= maxLineYA + EPSILON && maxLineYB >= minLineYA - EPSILON;
+    }
+    return false;
+  } else {
+    // Check if lines are crossing in the segments
+    const lambda = ((s - q) * (r - a) + (p - r) * (s - b)) / det;
+    const gamma = ((b - d) * (r - a) + (c - a) * (s - b)) / det;
+
+    return (0 <= lambda + EPSILON  && lambda <= 1 + EPSILON) && (0 <= gamma + EPSILON && gamma <= 1 + EPSILON);
+  }
+}
+
+function floatEqual(float1, float2) {
+const EPSILON = 0.0001
+  return float1 <= float2 + EPSILON && float1 >= float2 -EPSILON;
+}
+
+main()
+</script>
